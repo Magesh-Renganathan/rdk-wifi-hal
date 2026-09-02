@@ -1401,7 +1401,9 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
 #if defined(VNTXER5_PORT) || defined(TARGET_GEMINI7_2)
 #ifdef CONFIG_MLO
     char mld_ifname[32];
-#endif 
+    mac_address_t mld0_hw_mac;
+    int mld0_mac_valid = 0;
+#endif
 #endif
     char *interface_name = NULL;
 
@@ -1426,6 +1428,12 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
             radio->index);
         pre_set_vap_params_fn(index, map);
     }
+
+#if defined(VNTXER5_PORT) || defined(TARGET_GEMINI7_2)
+#ifdef CONFIG_MLO
+    mld0_mac_valid = (wifi_hal_get_mac_address("mld0", mld0_hw_mac) >= 0);
+#endif
+#endif
 
     // now create vaps on the interfaces
     for (i = 0; i < map->num_vaps; i++) {
@@ -1460,15 +1468,6 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
         }
 #endif
 
-#if defined(VNTXER5_PORT) || defined(TARGET_GEMINI7_2)
-#ifdef CONFIG_MLO
-        if (platform_set_intf_mld_bonding(radio, interface) != RETURN_OK) {
-            wifi_hal_error_print("%s:%d: vap index:%d failed to create bonding\n", __func__, __LINE__,
-                vap->vap_index);
-            continue;
-        }
-#endif
-#endif
         wifi_hal_info_print("%s:%d: vap index:%d mode:%d vap_name:%s\n", __func__, __LINE__,
             vap->vap_index, vap->vap_mode, vap->vap_name);
         if (vap->vap_mode == wifi_vap_mode_ap) {
@@ -1491,13 +1490,13 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
         memcpy((unsigned char *)&interface->vap_info, (unsigned char *)vap, sizeof(wifi_vap_info_t));
         interface_name = wifi_hal_get_interface_name(interface);
 
-#ifdef CONFIG_GENERIC_MLO
+#if defined(CONFIG_GENERIC_MLO) || defined(CONFIG_MLO)
         // VAP down removes MLO links, so restrict down of interface to sta mode only
         if (vap->vap_mode == wifi_vap_mode_sta) {
 #endif
             wifi_hal_info_print("%s:%d: interface:%s set down\n", __func__, __LINE__, interface->name);
             nl80211_interface_enable(interface->name, false);
-#ifdef CONFIG_GENERIC_MLO
+#if defined(CONFIG_GENERIC_MLO) || defined(CONFIG_MLO)
         }
 #endif
 
@@ -1547,8 +1546,12 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                 wifi_hal_info_print("%s:%d: interface:%s create bridge:%s\n", __func__, __LINE__,
                     interface_name, vap->bridge_name);
 #if (defined(VNTXER5_PORT) || defined(TARGET_GEMINI7_2)) && defined(CONFIG_MLO)
-                if (radio->oper_param.variant & WIFI_80211_VARIANT_BE) {
-                    snprintf(mld_ifname, sizeof(mld_ifname), "mld%d",  vap->vap_index);
+                if ((radio->oper_param.variant & WIFI_80211_VARIANT_BE) &&
+                    wifi_hal_is_mld_enabled(interface) &&
+                    mld0_mac_valid &&
+                    memcmp(vap->u.bss_info.mld_info.common_info.mld_addr,
+                           mld0_hw_mac, ETH_ALEN) == 0) {
+                    snprintf(mld_ifname, sizeof(mld_ifname), "mld0");
                     if (nl80211_create_bridge(mld_ifname, vap->bridge_name) != 0) {
                         wifi_hal_error_print("%s:%d: interface:%s failed to create bridge:%s\n",
                             __func__, __LINE__, interface_name, vap->bridge_name);
@@ -1573,7 +1576,15 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                     continue;
                 }
             }
-
+#if defined(VNTXER5_PORT) || defined(TARGET_GEMINI7_2)
+#ifdef CONFIG_MLO
+            if (platform_set_intf_mld_bonding(radio, interface) != RETURN_OK) {
+                wifi_hal_error_print("%s:%d: vap index:%d failed to create bonding\n", __func__, __LINE__,
+                vap->vap_index);
+                continue;
+            }
+#endif
+#endif
             wifi_hal_info_print("%s:%d: interface:%s update hostapd params\n", __func__, __LINE__,
                 interface_name);
             if (update_hostap_interface_params(interface) != RETURN_OK) {
@@ -1581,7 +1592,6 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                     __func__, __LINE__, interface_name);
                 return RETURN_ERR;
             }
-
             wifi_hal_info_print("%s:%d: interface:%s vap_initialized:%d\n", __func__, __LINE__,
                 interface_name, interface->vap_initialized);
             if (interface->vap_initialized == true) {
@@ -1621,9 +1631,12 @@ INT wifi_hal_createVAP(wifi_radio_index_t index, wifi_vap_info_map_t *map)
                 nl80211_interface_enable(interface_name, vap->u.bss_info.enabled);
 #if defined(VNTXER5_PORT) || defined(TARGET_GEMINI7_2)
 #ifdef CONFIG_MLO
-                if(radio->oper_param.variant & WIFI_80211_VARIANT_BE)
-                {
-                    snprintf(mld_ifname, sizeof(mld_ifname), "mld%d", vap->vap_index);
+                if ((radio->oper_param.variant & WIFI_80211_VARIANT_BE) &&
+                    wifi_hal_is_mld_enabled(interface) &&
+                    mld0_mac_valid &&
+                    memcmp(vap->u.bss_info.mld_info.common_info.mld_addr,
+                           mld0_hw_mac, ETH_ALEN) == 0) {
+                    snprintf(mld_ifname, sizeof(mld_ifname), "mld0");
                     nl80211_interface_enable(mld_ifname, vap->u.bss_info.enabled);
                 }
 #endif
