@@ -511,7 +511,7 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
                     reason = station->disconnect_reason_code;
                 }
 #endif
-#if !defined(CONFIG_GENERIC_MLO) && (HOSTAPD_VERSION <= 210)
+#if ((!defined(CONFIG_GENERIC_MLO) && (HOSTAPD_VERSION <= 210)) && (!defined(TARGET_GEMINI7_2)))
                 ap_free_sta(&interface->u.ap.hapd, station);
 #endif // !defined(CONFIG_GENERIC_MLO)
             }
@@ -567,7 +567,7 @@ static void nl80211_frame_tx_status_event(wifi_interface_info_t *interface, stru
                     wifi_hal_info_print("reason from disconnect reason code is %d\n",reason);
                 }
 #endif
-#if !defined(CONFIG_GENERIC_MLO) && (HOSTAPD_VERSION <= 210)
+#if ((!defined(CONFIG_GENERIC_MLO) && (HOSTAPD_VERSION <= 210)) && (!defined(TARGET_GEMINI7_2)))
                 ap_free_sta(&interface->u.ap.hapd, station);
 #endif // !defined(CONFIG_GENERIC_MLO)
             }

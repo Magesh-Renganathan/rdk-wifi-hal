@@ -2265,7 +2265,7 @@ int process_frame_mgmt(wifi_interface_info_t *interface, struct ieee80211_mgmt *
                 reason = station->disconnect_reason_code;
             }
 #endif
-#if !defined(CONFIG_GENERIC_MLO) && (HOSTAPD_VERSION <= 210)
+#if ((!defined(CONFIG_GENERIC_MLO) && (HOSTAPD_VERSION <= 210)) && !defined(TARGET_GEMINI7_2))
             ap_free_sta(&interface->u.ap.hapd, station);
 #endif // !defined(CONFIG_GENERIC_MLO)
         } else {
@@ -2338,7 +2338,7 @@ int process_frame_mgmt(wifi_interface_info_t *interface, struct ieee80211_mgmt *
                     reason = station->disconnect_reason_code;
                 }
 #endif
-#if !defined(CONFIG_GENERIC_MLO) && (HOSTAPD_VERSION <= 210)
+#if ((!defined(CONFIG_GENERIC_MLO) && (HOSTAPD_VERSION <= 210)) && (!defined(TARGET_GEMINI7_2)))
             ap_free_sta(&interface->u.ap.hapd, station);
 #endif // !defined(CONFIG_GENERIC_MLO)
         }
@@ -15146,7 +15146,7 @@ int wifi_drv_sta_remove(void *priv, const u8 *addr)
 
     wifi_hal_dbg_print("%s:%d: Enter\n", __func__, __LINE__);
 
-    return wifi_sta_remove(interface, addr, -1, 1);
+    return wifi_sta_remove(interface, addr, -1, 0);
 }
 
 int wifi_drv_sta_add(void *priv, struct hostapd_sta_add_params *params)
@@ -15196,6 +15196,14 @@ int wifi_drv_sta_add(void *priv, struct hostapd_sta_add_params *params)
     } else {
         cmd = params->set ? NL80211_CMD_SET_STATION : NL80211_CMD_NEW_STATION;
         cmd_string = params->set ? "NL80211_CMD_SET_STATION" : "NL80211_CMD_NEW_STATION";
+    }
+#elif defined(TARGET_GEMINI7_2)
+    if (params->mld_link_sta) {
+	cmd = NL80211_CMD_ADD_LINK_STA;
+	cmd_string = "NL80211_CMD_ADD_LINK_STA";
+    } else {
+	cmd = params->set ? NL80211_CMD_SET_STATION : NL80211_CMD_NEW_STATION;
+	cmd_string = params->set ? "NL80211_CMD_SET_STATION" : "NL80211_CMD_NEW_STATION";
     }
 #else
     cmd = params->set ? NL80211_CMD_SET_STATION : NL80211_CMD_NEW_STATION;
@@ -15411,7 +15419,7 @@ int wifi_drv_sta_add(void *priv, struct hostapd_sta_add_params *params)
         nla_nest_end(msg, wme);
     }
 
-#if HOSTAPD_VERSION >= 211 && defined(CONFIG_GENERIC_MLO)
+#if ((HOSTAPD_VERSION >= 211 && defined(CONFIG_GENERIC_MLO)) || defined(TARGET_GEMINI7_2))
     if (params->mld_link_id >= 0) {
         if (nla_put_u8(msg, NL80211_ATTR_MLO_LINK_ID, params->mld_link_id) < 0) {
             goto fail;
